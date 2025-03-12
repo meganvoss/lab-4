@@ -1,0 +1,472 @@
+---
+title: "lab 4"
+format:
+  html:
+    self-contained: true
+---
+
+# Part 1
+
+```{r}
+remotes::install_github("lter/lterdatasampler")
+```
+
+```{r}
+library(tidyverse)
+library(ggpubr)
+library(lterdatasampler)
+library(car)
+library(visdat)
+```
+
+```{r}
+?and_vertebrates
+```
+
+```{r}
+# View the data structure
+glimpse(and_vertebrates)
+```
+
+```{r}
+vis_dat(and_vertebrates)
+```
+
+```{r}
+# Explore the metadata in the Help pane
+?and_vertebrates
+```
+
+# Chi-square Categorical Analysis
+
+```{r}
+and_vertebrates |> 
+  filter(species == "Cutthroat trout") |> 
+  count(unittype)
+```
+
+```{r}
+and_vertebrates |> 
+  filter(species == "Cutthroat trout") |> 
+  drop_na(unittype) |> 
+  count(unittype)
+```
+
+```{r}
+# First clean the dataset to create the contingency table from
+trout_clean <- and_vertebrates  |>  
+  #filter Cutthroat trout
+  filter(species == "Cutthroat trout") |> 
+  # lets test using just the 3 most abundant unittypes
+  filter(unittype %in% c("C", "P", "SC")) |> 
+  # drop NAs for both unittype and section
+  drop_na(unittype, section)
+
+cont_table <- table(trout_clean$section, trout_clean$unittype)
+```
+
+```{r}
+chisq.test(cont_table)
+```
+
+```{r}
+trout_clean  |>  
+  count(unittype, section)  |>  
+  ggpubr::ggbarplot(x = 'unittype', y = 'n', 
+                    fill = 'section', 
+                    palette = c("#00AFBB", "#E7B800"),
+                    add = "mean_se") 
+```
+
+# t-test Compare 2 Means
+
+```{r}
+trout_clean |> 
+  drop_na(weight_g) |> 
+  ggpubr::ggviolin(x = "section", 
+                   y     = "weight_g", 
+                   add   = "boxplot",
+                   color = "section",
+                   palette = c("#00AFBB", "#E7B800")) 
+
+```
+
+```{r}
+cc_weight <- trout_clean |> 
+  filter(section == "CC") |> 
+  pull(weight_g)
+
+og_weight <- trout_clean |> 
+  filter(section == "OG") |> 
+  pull(weight_g)
+
+var.test(cc_weight, og_weight)
+```
+
+# variances are not equal, we know this because the F statistic is 1.29 which isn't very close to 1 (f stat is ratio of the two variances). The p-value is also very small and in addition, 1 is not includeded in the 95% confidence interval.
+
+```{r}
+ggpubr::ggarrange(ggpubr::gghistogram(cc_weight, main = "Clear Cut"), 
+                  ggpubr::gghistogram(og_weight, main = "Old Growth"))
+```
+
+```{r}
+var.test(log(cc_weight), log(og_weight))
+```
+
+```{r}
+t.test(log(trout_clean$weight_g) ~ trout_clean$section, var.equal = TRUE)
+```
+
+# How does this relate to the original hypothesis based on the graph we made at the beginning of this section?
+
+## t = 2.854 which is greater than 2 and the p-value = 0.004 which is less than 0.05 so with the two samples of tree data we do have significant evidence to suggest that there is a true difference in the mean counts of the clear cut trees and the old growth trees.
+
+```{r}
+t.test(trout_clean$weight_g ~ trout_clean$section, var.equal = FALSE)
+```
+
+```{r}
+sally_clean <- and_vertebrates |> 
+  filter(species == "Coastal giant salamander") |> 
+  drop_na(length_2_mm, weight_g)
+```
+
+```{r}
+ggarrange(gghistogram(sally_clean$length_2_mm, title = "Length"),
+gghistogram(sally_clean$weight_g, title = "Weight"))
+```
+
+```{r}
+s <- sally_clean |> 
+  slice_sample(n = 5000) 
+
+shapiro.test(s$length_2_mm)
+```
+
+```{r}
+shapiro.test(s$weight_g)
+```
+
+```{r}
+ggarrange(
+ gghistogram(log(sally_clean$length_2_mm), title = "Length"), 
+ gghistogram(log(sally_clean$weight_g), title = "Weight") )
+```
+
+```{r}
+cor.test(log(sally_clean$length_2_mm), log(sally_clean$weight_g))
+```
+
+```{r}
+sally_clean |> 
+  mutate(log_length = log(length_2_mm), log_weight = log(weight_g)) |> 
+  ggscatter(x = 'log_length', 
+            y = 'log_weight', 
+            alpha = .35,
+            add = "loess")
+```
+
+```{r}
+cor.test(sally_clean$length_2_mm, sally_clean$weight_g, method = "spearman")
+```
+
+# Exercises Part 1
+
+# Q1
+
+```{r}
+library(tidyverse)
+library(lterdatasampler)
+
+data("and_vertebrates")
+
+```
+
+```{r}
+salamander_data <- and_vertebrates %>%
+  filter(species == "Coastal giant salamander")
+
+```
+
+```{r}
+summary(salamander_data$section)
+summary(salamander_data$unittype)
+
+```
+
+```{r}
+salamander_table <- table(salamander_data$section, salamander_data$unittype)
+print(salamander_table)
+
+```
+
+```{r}
+chi_test <- chisq.test(salamander_table)
+print(chi_test)
+
+```
+
+```{r}
+print(chi_test$expected)
+
+```
+
+# We conducted a chi-squared test of independence for the relationship between forest type and chanel unit type on coastal giant salamander populations. Through this test it demonstrated a strong relationship between these variables (X\^2-200.71, df=5, p=\<0.001). We have significant evidence to suggest that salamander abundance distribution in different channel types does depend on whether the forest is clear cut or old growth.
+
+# Q2
+
+```{r}
+salamander_data <- and_vertebrates %>%
+  filter(species == "Coastal giant salamander") %>%
+  select(section, weight_g) %>%  
+  drop_na()  
+
+```
+
+```{r}
+t_test <- t.test(weight_g ~ section, data = salamander_data, var.equal = FALSE)
+print(t_test)
+
+```
+
+## We conducted an independent two-sample t-test and compared the biomass of coastal giant salamanders between clear-cut and old-growth forests. We do have significant evidence to suggest that the there is a difference in salamander biomass between the two forests (t = 4.9255, df = 6335.9, p = 8.629e-07).
+
+# Q3
+
+```{r}
+?and_vertebrates
+
+```
+
+```{r}
+trout_data <- and_vertebrates %>%
+  filter(species == "Cutthroat trout") %>%
+  select(length_1_mm, weight_g) %>%
+  drop_na()  
+```
+
+```{r}
+ggplot(trout_data, aes(x = length_1_mm)) + geom_histogram(bins = 30) + theme_minimal()
+ggplot(trout_data, aes(x = weight_g)) + geom_histogram(bins = 30) + theme_minimal()
+
+```
+
+```{r}
+ggplot(trout_data, aes(x = length_1_mm)) + 
+  geom_histogram(bins = 30, fill = "blue", alpha = 0.5) + 
+  theme_minimal()
+
+ggplot(trout_data, aes(x = weight_g)) + 
+  geom_histogram(bins = 30, fill = "red", alpha = 0.5) + 
+  theme_minimal()
+
+```
+
+```{r}
+cor_test <- cor.test(trout_data$length_1_mm, trout_data$weight_g, method = "kendall")
+
+print(cor_test)
+
+```
+
+## We conducted a Kendall’s rank correlation test to explore the relationship between body length (snout-to-fork) and body mass in cutthroat trout. This test showed a strong positive correlation (τ = 0.94, p \< 0.001) so we do have significant evidence to suggest that as body length increases, body mass also increases.
+
+# Part 2
+
+```{r}
+options(repos = c(CRAN = "https://cran.rstudio.com"))
+
+```
+
+```{r}
+install.packages("remotes")  
+remotes::install_github("lter/lterdatasampler")
+
+library(lterdatasampler)
+library(dplyr)
+library(tidyverse)
+library(ggpubr)
+library(lterdatasampler)
+library(car)
+library(visdat)
+library(remotes)
+
+```
+
+```{r}
+# data set
+data("pie_crab")
+
+head(pie_crab)  
+str(pie_crab)   
+summary(pie_crab)  
+```
+
+```{r}
+glimpse(pie_crab)
+```
+
+```{r}
+vis_dat(pie_crab)
+```
+
+```{r}
+?pie_crab
+```
+
+```{r}
+# sample size per site
+count(pie_crab, site)
+```
+
+```{r}
+summary(pie_crab)
+```
+
+```{r}
+pie_crab |> 
+  ggboxplot(x = 'site', y = 'size', col = 'site') +
+  geom_jitter(size =.25) + 
+  theme(legend.postition = "none")
+```
+
+```{r}
+norms <- pie_crab |> 
+  nest(data = -site) |>
+  mutate(Shapiro = map(data, ~ shapiro.test(.x$size)),
+         n = map_dbl(data, nrow),
+         glance_shapiro = map(Shapiro, broom::glance)) |>
+  unnest(glance_shapiro)
+
+flextable::flextable(dplyr::select(norms, site, n, statistic, p.value)) |>
+  flextable::set_caption("Shapiro-Wilk normality test for size at each site")
+```
+
+```{r}
+(res_aov <- aov(size ~ site, data = pie_crab))
+```
+
+```{r}
+gghistogram(res_aov$residuals)
+```
+
+```{r}
+shapiro.test(res_aov$residuals)
+```
+
+```{r}
+leveneTest(size ~ site, data = pie_crab)
+```
+
+```{r}
+#perform Welch's ANOVA
+oneway.test(size ~ site, data = pie_crab, var.equal = FALSE)
+```
+
+```{r}
+# Filter a subset of the sites
+pie_sites <- pie_crab |> 
+  filter(site %in% c("GTM", "DB", "PIE"))
+
+# Check for equal variance
+leveneTest(size ~ site, data = pie_sites)
+```
+
+```{r}
+# Note that the variances are equal (p = 0.5802), so we can proceed with the ANOVA
+
+# ANOVA for the data subset
+pie_anova <- aov(size ~ site, data = pie_sites)
+
+# View the ANOVA results 
+summary(pie_anova)
+```
+
+```{r}
+TukeyHSD(pie_anova)
+```
+
+```{r}
+pie_lm <- lm(size ~ latitude, data = pie_crab)
+
+#view the results of the linear model
+summary(pie_lm)
+```
+
+```{r}
+pie_crab |> 
+  ggscatter(x = 'latitude', y = 'size', 
+            alpha = .35, 
+            add = "reg.line")
+```
+
+```{r}
+new_lat <- data.frame(latitude = c(32, 36, 38))
+
+broom::augment(pie_lm, newdata = new_lat)
+```
+
+```{r}
+pie_mlm <- lm(size ~ latitude + air_temp + water_temp, data = pie_crab)
+
+summary(pie_mlm)
+```
+
+```{r}
+pie_crab |> 
+  dplyr::select(latitude, air_temp, water_temp) |> 
+  cor()
+```
+
+# Exercises Part 2
+
+# Q1
+
+```{r}
+ggplot(pie_crab, aes(x = site, y = size, fill = site)) +
+  geom_boxplot() +
+  labs(x = "Site", y = "Carapace Width (mm)", title = "Carapace Width by Site (Ordered by Latitude)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## We conducted a one-way ANOVA compare the carapace width (size) of fiddler crabs across three different sites (GTM-DB, PIE-DB, and PIE-GTM). The test suggests a significant difference in carapace width between sites (F(2, 83) = 60.02, p \< 0.001). We also did a Tukey’s HSD post-hoc test which showed that GTM-DB crabs had significantly smaller carapace widths compared to PIE-GTM (mean difference = -3.20 mm, p \< 0.001) and PIE-DB (mean difference = -2.90 mm, p \< 0.001). Also, PIE-GTM crabs had significantly larger carapace widths than GTM-DB (mean difference = 6.10 mm, p \< 0.001) and PIE-DB (mean difference = 2.90 mm, p \< 0.001). We do have significant evidence to sugggest that there is a difference between PIE-GTM and PIE-DB, with PIE-GTM crabs being larger (mean difference = 2.90 mm, p \< 0.001).
+
+# Q2
+
+```{r}
+lm_model <- lm(size ~ water_temp_sd, data = pie_crab)
+
+summary(lm_model)
+```
+
+## We conducted a simple linear regression to explore the effect of annual variation in water temperature (water_temp_sd) on carapace width (size) of fiddler crabs. The results showed that water temperature variability was not a significant predictor of carapace width (F(1, 390) = 0.40, p = 0.528). The R-squared value was very small (R² = 0.00102) which suggests that water temperature variability explains less than 1% of the variance in carapace width. Also, the p-value for the slope coefficient (0.528) greater than 0.05 meaning we do NOT have significant evidence to suggest there is a relationship between water temperature variability and carapace width in this dataset.
+
+```{r}
+library(ggplot2)
+
+ggplot(pie_crab, aes(x = water_temp_sd, y = size)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE, color = "blue") + 
+  labs(x = "Annual Variation in Water Temperature (°C)", 
+       y = "Carapace Width (mm)", 
+       title = "Effect of Water Temperature Variation on Carapace Width") +
+  theme_minimal()
+```
+
+# Q3
+
+```{r}
+correlation_matrix <- cor(pie_crab[, c("latitude", "air_temp_sd", "water_temp_sd")], use = "complete.obs")
+correlation_matrix
+```
+
+```{r}
+lm_model_multiple <- lm(size ~ latitude + air_temp_sd + water_temp_sd, data = pie_crab)
+
+summary(lm_model_multiple)
+
+```
+
+## We conducted a multiple linear regression to explore the effects of latitude, air temperature variability, and water temperature variability on carapace width in fiddler crabs. We do have significant evidence to suggest that latitude was a predictor of carapace width (p \< 0.001), but air temperature and water temperature variability were not significant predictors (p = 0.173 and p = 0.325, respectively). The model explained 35.16% of the variance in carapace width (R² = 0.3516).
